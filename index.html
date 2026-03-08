@@ -1,0 +1,2550 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>DEVO Music Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        /* ... (стили остаются без изменений) ... */
+        :root {
+            --bg: #030303;
+            --accent: #ff2d55;
+            --nav-bottom: 35px; 
+            --mini-player-bottom: 125px;
+        }
+
+        * {
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            -webkit-user-select: none;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: white;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+            touch-action: none; 
+            overscroll-behavior: none;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        .bg-layer {
+            position: fixed;
+            inset: -15%;
+            z-index: 0;
+            background-size: cover;
+            background-position: center;
+            filter: blur(80px) brightness(0.45) saturate(1.4); 
+            transition: opacity 1.8s cubic-bezier(0.4, 0, 0.2, 1);
+            background-color: #000;
+            will-change: opacity, transform;
+            transform: translate3d(0,0,0);
+            pointer-events: none;
+        }
+
+        .bg-layer.animate {
+            animation: breathe 25s ease-in-out infinite alternate;
+        }
+
+        .gradient-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 1;
+            background: radial-gradient(circle at 50% 50%, rgba(255,45,85,0.05), transparent 70%),
+                        linear-gradient(45deg, rgba(0,0,0,0.4), transparent);
+            mix-blend-mode: screen;
+            pointer-events: none;
+            transform: translate3d(0,0,0);
+        }
+
+        @keyframes breathe {
+            0% { transform: scale(1) translate3d(0, 0, 0); }
+            50% { transform: scale(1.1) translate3d(2%, 1%, 0); }
+            100% { transform: scale(1) translate3d(-1%, -1%, 0); }
+        }
+
+        #bg-primary { opacity: 0; z-index: 1; }
+        #bg-secondary { opacity: 0; z-index: 0; }
+
+        .app-container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            z-index: 10;
+        }
+
+        .screen {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding-bottom: 215px; 
+            display: none;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-y; 
+            overscroll-behavior-y: none;
+            transition: filter 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.5s ease;
+            transform-origin: center 30%;
+            will-change: transform, opacity, filter, scroll-position;
+        }
+
+        .screen.active { 
+            display: block; 
+            animation: fadeIn 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+        }
+
+        body.player-open .screen.active {
+            filter: blur(12px) brightness(0.7);
+            transform: scale(0.92) translateY(-20px) translate3d(0,0,0);
+            opacity: 0.6;
+            pointer-events: none;
+            touch-action: none;
+        }
+
+        body.player-open .bottom-nav {
+            filter: blur(15px) brightness(0.7);
+            transform: scale(0.9) translateY(20px) translate3d(0,0,0);
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .glass {
+            background: rgba(30, 30, 30, 0.4);
+            backdrop-filter: blur(50px);
+            -webkit-backdrop-filter: blur(50px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+            transform: translate3d(0,0,0);
+        }
+
+        .track-card.active-track, .trending-item.active-track {
+            position: relative;
+        }
+
+        .track-card.active-track {
+            background: linear-gradient(90deg, rgba(255, 45, 85, 0.2) 0%, rgba(255, 45, 85, 0.05) 100%) !important;
+            border-radius: 24px !important;
+            border: 1px solid rgba(255, 45, 85, 0.5) !important;
+        }
+        
+        .trending-item.active-track img {
+            border: 3px solid #ff2d55;
+            padding: 4px;
+            transform: scale(1.05);
+        }
+
+        .track-card.active-track h4, .trending-item.active-track span:first-of-type { 
+            color: #ff2d55 !important; 
+        }
+
+        .mood-chip {
+            transition: all 0.3s ease;
+            white-space: nowrap;
+        }
+        .mood-chip.active {
+            background: #fff;
+            color: #000;
+            font-weight: 900;
+            box-shadow: 0 0 15px rgba(255,255,255,0.4);
+        }
+
+        .logo-text { 
+            font-weight: 900; 
+            letter-spacing: -0.02em; 
+            text-transform: uppercase;
+            font-size: 1.85rem;
+        }
+
+        .bottom-nav {
+            position: fixed;
+            bottom: var(--nav-bottom);
+            left: 20px;
+            right: 20px;
+            border-radius: 35px;
+            z-index: 60;
+            height: 70px;
+            transition: filter 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.5s ease;
+            transform: translate3d(0,0,0);
+        }
+
+        #mini-player {
+            position: fixed;
+            bottom: var(--mini-player-bottom);
+            left: 20px;
+            right: 20px;
+            z-index: 55;
+            overflow: hidden;
+            transition: transform 0.4s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.3s ease;
+            cursor: pointer;
+            touch-action: pan-x;
+            height: 70px;
+            transform: translate3d(0,0,0);
+        }
+
+        #m-progress-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 3px;
+            background: white;
+            width: 0%;
+            transition: width 0.1s linear;
+            will-change: width;
+        }
+
+        #full-player {
+            background: rgba(0, 0, 0, 0.3); 
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            z-index: 100;
+            position: fixed;
+            top: 100vh;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            transition: top 0.45s cubic-bezier(0.19, 1, 0.22, 1), transform 0.1s ease-out;
+            touch-action: none; 
+            will-change: top, transform;
+        }
+
+        #full-player.open {
+            top: 0;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 200;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .trending-item { 
+            flex-shrink: 0; 
+            width: 190px;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .truncate-custom {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: block;
+        }
+
+        #toast {
+            position: fixed;
+            top: 50px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-150px);
+            transition: transform 0.5s cubic-bezier(0.19, 1, 0.22, 1);
+            z-index: 300;
+            pointer-events: none;
+        }
+        #toast.show { transform: translateX(-50%) translateY(0); }
+
+        .spinner {
+            border: 3px solid rgba(255,255,255,0.1);
+            border-left-color: #fff;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        .swipe-handle {
+            width: 40px;
+            height: 5px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 10px;
+            margin: 12px auto 0;
+        }
+
+        @keyframes vibeBlob {
+            0% { transform: translate3d(0, 0, 0) scale(1); }
+            33% { transform: translate3d(30px, -30px, 0) scale(1.1); }
+            66% { transform: translate3d(-20px, 20px, 0) scale(0.9); }
+            100% { transform: translate3d(0, 0, 0) scale(1); }
+        }
+        .vibe-circle-1 {
+            animation: vibeBlob 7s infinite alternate;
+            will-change: transform;
+        }
+        .vibe-circle-2 {
+            animation: vibeBlob 7s infinite alternate-reverse;
+            will-change: transform;
+        }
+        
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        input[type="text"] {
+            font-size: 16px !important;
+            touch-action: manipulation;
+        }
+
+        @keyframes shimmer-bw {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        #auth-overlay {
+            background: linear-gradient(125deg, #000000, #1c1c1c, #454545, #1c1c1c, #000000);
+            background-size: 300% 300%;
+            animation: shimmer-bw 10s ease infinite;
+        }
+
+        .subscribe-btn.active {
+            background: #ff2d55 !important;
+            color: white !important;
+            border-color: #ff2d55 !important;
+            box-shadow: 0 0 20px rgba(255, 45, 85, 0.4);
+        }
+
+        .artist-header-img {
+            height: 35vh;
+            width: 100%;
+            object-fit: cover;
+            mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+            -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+        }
+
+        .room-participant {
+            animation: participantJoin 0.3s ease;
+        }
+        
+        @keyframes participantJoin {
+            0% { transform: scale(0.8); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        
+        .pulse-dot {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+        
+        .dj-crown {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: gold;
+            color: black;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: 900;
+            box-shadow: 0 2px 8px rgba(255, 215, 0, 0.4);
+        }
+
+        .offline-item {
+            position: relative;
+        }
+        .offline-badge {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            background: #ff2d55;
+            border-radius: 20px;
+            padding: 2px 6px;
+            font-size: 8px;
+            font-weight: 900;
+            text-transform: uppercase;
+            color: white;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="bg-primary" class="bg-layer animate"></div>
+    <div id="bg-secondary" class="bg-layer animate"></div>
+    <div class="gradient-overlay"></div>
+    
+    <div id="toast" class="glass px-8 py-3 rounded-full text-[10px] font-black uppercase tracking-[0.2em]">Скопировано</div>
+
+    <!-- MODAL VK AUTH -->
+    <div id="vk-modal" class="modal-overlay" style="display: none;">
+        <div class="glass w-full max-w-sm rounded-[40px] p-8 flex flex-col gap-6" onclick="event.stopPropagation()">
+            <div class="text-center">
+                <h2 class="text-2xl font-black mb-1">VK Music Free</h2>
+                <p class="text-[10px] opacity-40 uppercase font-black tracking-widest">Авторизация через Kate Mobile</p>
+            </div>
+
+            <div class="space-y-4">
+                <div class="p-4 glass rounded-3xl text-[11px] leading-relaxed opacity-80">
+                    1. Нажмите кнопку ниже для перехода к авторизации VK.<br>
+                    2. Войдите в аккаунт и разрешите доступ.<br>
+                    3. Скопируйте <b>весь URL</b> из адресной строки или только часть после <b>access_token=</b>.<br>
+                    4. Вставьте его в поле ниже.
+                </div>
+                
+                <a href="https://oauth.vk.com/authorize?client_id=2685278&scope=audio,offline&redirect_uri=https://oauth.vk.com/blank.html&display=page&response_type=token" target="_blank" class="block w-full py-4 rounded-2xl bg-[#0077FF] text-white text-center text-[10px] font-black uppercase tracking-widest active:scale-95 transition">
+                    Получить токен
+                </a>
+
+                <input id="vk-token-input" type="text" placeholder="Вставьте токен или URL здесь" class="w-full glass p-5 rounded-3xl outline-none text-center font-mono text-[14px]">
+                
+                <button onclick="saveVkToken()" class="w-full py-4 rounded-2xl bg-white text-black text-[10px] font-black uppercase tracking-widest active:scale-95 transition">
+                    Подключить VK
+                </button>
+            </div>
+
+            <button onclick="document.getElementById('vk-modal').style.display='none'" class="text-[10px] font-black uppercase opacity-30 tracking-widest py-2">Позже</button>
+        </div>
+    </div>
+
+    <!-- MODAL ROOMS -->
+    <div id="rooms-modal" class="modal-overlay" onclick="toggleRoomsModal(false)">
+        <div class="glass w-full max-w-sm rounded-[40px] p-8 flex flex-col gap-6" onclick="event.stopPropagation()">
+            <div class="text-center">
+                <h2 class="text-2xl font-black mb-1">Комнаты</h2>
+                <p class="text-[10px] opacity-40 uppercase font-black tracking-widest">Слушайте вместе с друзьями</p>
+            </div>
+
+            <!-- КАРТОЧКА МОЕЙ КОМНАТЫ -->
+            <div id="my-room-card" class="glass p-6 rounded-3xl border border-white/10 transition-all duration-300">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-2 h-2 rounded-full bg-zinc-500" id="room-status-dot"></div>
+                        <span class="text-xs font-bold uppercase tracking-widest">Моя комната</span>
+                    </div>
+                    <span id="room-listeners" class="text-[9px] font-black opacity-30">0 СЛУШАТЕЛЕЙ</span>
+                </div>
+                
+                <!-- Область информации о треке (видна, когда комната активна) -->
+                <div id="room-now-playing" class="hidden mb-4 p-3 rounded-2xl bg-white/5 items-center gap-3">
+                    <img id="room-track-cover" src="" class="w-10 h-10 rounded-xl bg-zinc-800 object-cover">
+                    <div class="flex-1 min-w-0">
+                        <p id="room-track-title" class="text-xs font-bold truncate">...</p>
+                        <p id="room-track-artist" class="text-[10px] opacity-40 truncate">...</p>
+                    </div>
+                </div>
+                
+                <!-- Динамические кнопки управления -->
+                <div id="room-controls-inactive">
+                    <button onclick="createRoom()" class="w-full py-4 rounded-2xl bg-white text-black text-[10px] font-black uppercase tracking-widest active:scale-95 transition">
+                        Открыть комнату
+                    </button>
+                    <p class="text-center text-[9px] opacity-20 mt-3">Вы станете диджеем</p>
+                </div>
+                
+                <div id="room-controls-active" class="hidden space-y-3">
+                    <div class="flex gap-2">
+                        <input type="text" id="room-password-input" placeholder="Пароль (необяз.)" class="flex-1 glass p-3 rounded-2xl outline-none text-center text-[11px] placeholder-white/30">
+                        <button onclick="copyRoomLink()" class="glass px-4 rounded-2xl text-[10px] font-black uppercase active:scale-95 transition">
+                            🔗
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="toggleRoomPrivacy()" id="room-privacy-btn" class="py-3 glass rounded-2xl text-[10px] font-black uppercase active:scale-95 transition">
+                            🔒 Приватная
+                        </button>
+                        <button onclick="leaveRoom()" class="py-3 bg-white/10 text-white rounded-2xl text-[10px] font-black uppercase active:scale-95 transition">
+                            Закрыть
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- СПИСОК АКТИВНЫХ КОМНАТ -->
+            <div class="space-y-3">
+                <div class="flex justify-between items-center">
+                    <p class="text-[9px] font-black opacity-20 uppercase tracking-widest">Активные комнаты</p>
+                    <button onclick="refreshRoomsList()" class="text-[9px] font-black opacity-30 uppercase active:opacity-100">ОБНОВИТЬ</button>
+                </div>
+                <div id="active-rooms-list" class="space-y-3 max-h-[250px] overflow-y-auto scrollbar-hide">
+                    <div class="text-center py-8 opacity-20 text-[10px] uppercase font-black">Никто не слушает</div>
+                </div>
+            </div>
+
+            <button onclick="toggleRoomsModal(false)" class="text-[10px] font-black uppercase opacity-30 tracking-widest py-2 mt-2">Закрыть</button>
+        </div>
+    </div>
+
+    <!-- MODAL ROOM PASSWORD -->
+    <div id="room-password-modal" class="modal-overlay" onclick="closePasswordModal()" style="display: none;">
+        <div class="glass w-full max-w-sm rounded-[40px] p-8 flex flex-col gap-6" onclick="event.stopPropagation()">
+            <div class="text-center">
+                <h2 class="text-2xl font-black mb-1">Приватная комната</h2>
+                <p class="text-[10px] opacity-40 uppercase font-black tracking-widest">Введите пароль для входа</p>
+            </div>
+            
+            <div class="space-y-4">
+                <input type="text" id="room-password-enter" placeholder="Введите пароль" class="w-full glass p-5 rounded-3xl outline-none text-center text-[16px] placeholder-white/30">
+                
+                <button onclick="joinRoomWithPassword()" class="w-full py-4 rounded-2xl bg-white text-black text-[10px] font-black uppercase tracking-widest active:scale-95 transition">
+                    Войти в комнату
+                </button>
+                
+                <button onclick="closePasswordModal()" class="w-full text-[10px] font-black uppercase opacity-30 tracking-widest py-2">
+                    Отмена
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL ROOM PARTICIPANTS -->
+    <div id="room-participants-modal" class="modal-overlay" onclick="closeParticipantsModal()" style="display: none;">
+        <div class="glass w-full max-w-sm rounded-[40px] p-8 flex flex-col gap-6" onclick="event.stopPropagation()">
+            <div class="text-center">
+                <h2 class="text-2xl font-black mb-1">Участники</h2>
+                <p class="text-[10px] opacity-40 uppercase font-black tracking-widest" id="participants-count">0 человек</p>
+            </div>
+            
+            <div id="room-participants-list" class="space-y-3 max-h-[300px] overflow-y-auto scrollbar-hide">
+                <!-- Участники будут появляться здесь -->
+            </div>
+            
+            <button onclick="closeParticipantsModal()" class="text-[10px] font-black uppercase opacity-30 tracking-widest py-2">Закрыть</button>
+        </div>
+    </div>
+
+    <div id="auth-overlay" class="fixed inset-0 z-[1000] flex flex-col items-center justify-center p-8 text-center" style="display: none;">
+        <div class="flex items-center gap-4 mb-12">
+            <h1 class="logo-text">DEVO</h1>
+            <svg class="w-12 h-12 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+        </div>
+
+        <div id="auth-initial" class="w-full max-w-xs space-y-4">
+            <button onclick="showRegister()" class="w-full bg-white text-black font-black py-5 rounded-3xl uppercase tracking-widest text-xs active:scale-95 transition-transform">Новый аккаунт</button>
+            <button onclick="showLogin()" class="w-full glass text-white font-black py-5 rounded-3xl uppercase tracking-widest text-xs active:scale-95 transition-transform">Войти по ключу</button>
+        </div>
+
+        <div id="auth-register" class="w-full max-w-xs hidden space-y-6">
+            <p class="text-[10px] opacity-40 uppercase tracking-widest leading-relaxed">Ваш уникальный ключ. Сохраните его для входа на других устройствах.</p>
+            <div onclick="copyID('reg-id-display')" class="glass p-6 rounded-3xl break-all font-mono text-sm cursor-pointer active:scale-95 transition" id="reg-id-display">Генерация...</div>
+            <button onclick="completeAuth()" class="w-full bg-white text-black font-black py-5 rounded-3xl uppercase tracking-widest text-xs active:scale-95 transition-transform">Я сохранил, войти</button>
+        </div>
+
+        <div id="auth-login" class="w-full max-w-xs hidden space-y-4">
+            <input id="login-id-input" type="text" placeholder="Вставьте ваш ID ключ" class="w-full glass p-5 rounded-3xl outline-none text-center font-mono text-[16px]">
+            <button onclick="performLogin()" class="w-full bg-white text-black font-black py-5 rounded-3xl uppercase tracking-widest text-xs active:scale-95 transition-transform">Загрузить профиль</button>
+            <button onclick="showInitial()" class="w-full text-[10px] opacity-30 uppercase font-bold py-2">Назад</button>
+        </div>
+    </div>
+
+    <div class="app-container">
+        <section id="screen-home" class="screen active">
+            <header class="flex justify-between items-center pt-16 px-6 mb-8">
+                <div class="flex items-center gap-3">
+                    <span class="logo-text">DEVO</span>
+                    <svg class="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+                </div>
+                <div onclick="copyMyID()" class="glass px-5 py-2.5 rounded-full text-[10px] font-mono opacity-60 max-w-[130px] truncate active:scale-95 transition-transform" id="user-id-display">ID: ...</div>
+            </header>
+            
+            <div class="mb-8">
+                <h3 class="text-[10px] uppercase tracking-[0.5em] font-black mb-4 px-6 opacity-40">Настроение</h3>
+                <div id="mood-selector" class="flex gap-3 px-6 overflow-x-auto scrollbar-hide pb-2"></div>
+            </div>
+
+            <div class="mb-14">
+                <h3 id="trends-title" class="text-[10px] uppercase tracking-[0.5em] font-black mb-6 px-6 opacity-20">Тренды</h3>
+                <div id="trending-list" class="flex gap-5 overflow-x-auto px-6 scrollbar-hide py-4 min-h-[250px]">
+                    <div class="spinner mx-auto self-center"></div>
+                </div>
+            </div>
+
+            <div class="px-6">
+                <h3 class="text-[10px] uppercase tracking-[0.5em] font-black mb-6 opacity-20">Для тебя</h3>
+                <div id="recommend-list" class="space-y-4"></div>
+            </div>
+        </section>
+
+        <section id="screen-search" class="screen p-6">
+            <h3 class="text-3xl font-black mb-8 pt-14">Поиск <span class="text-xs opacity-30 ml-2 align-middle font-normal">VK Music</span></h3>
+            <div class="relative mb-6">
+                <input id="search-input" type="text" placeholder="Трек, артист или Ссылка" class="w-full glass rounded-3xl py-5 px-7 outline-none border-none text-[16px] placeholder-white/30">
+            </div>
+            
+            <div id="search-history-box" class="mb-8 hidden">
+                <p class="text-[9px] uppercase font-black opacity-30 mb-4 tracking-widest">Недавние</p>
+                <div id="search-history" class="flex flex-wrap gap-2"></div>
+            </div>
+
+            <div id="search-results" class="space-y-4"></div>
+            <div id="search-loader" class="hidden flex justify-center py-10">
+                <div class="spinner"></div>
+            </div>
+        </section>
+
+        <section id="screen-artist" class="screen">
+            <div class="relative w-full">
+                <img id="artist-cover" src="" class="artist-header-img bg-zinc-900">
+                <button onclick="switchScreen('search')" class="absolute top-16 left-6 w-10 h-10 glass rounded-full flex items-center justify-center active:scale-90 transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="3"><path d="M15 19l-7-7 7-7"/></svg>
+                </button>
+            </div>
+            <div class="px-6 -mt-12 relative z-10 mb-8">
+                <div class="flex justify-between items-end mb-4">
+                    <h2 id="artist-name-title" class="text-4xl font-black tracking-tighter">...</h2>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div class="glass p-4 rounded-[28px]">
+                        <p class="text-[8px] opacity-40 font-black uppercase tracking-widest mb-1">Фанаты DEVO</p>
+                        <p id="devo-subs-count" class="text-xl font-black text-white">0</p>
+                    </div>
+                    <div class="glass p-4 rounded-[28px]">
+                        <p class="text-[8px] opacity-40 font-black uppercase tracking-widest mb-1">Мировой рейтинг</p>
+                        <p id="artist-fans" class="text-xl font-black opacity-80">...</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-4">
+                    <button id="artist-sub-btn" onclick="toggleSubscribeArtist()" class="subscribe-btn bg-white text-black flex-1 py-4 rounded-3xl text-xs font-black uppercase tracking-widest active:scale-95 transition">Подписаться</button>
+                </div>
+            </div>
+            
+            <div class="px-6">
+                <h3 class="text-[10px] uppercase tracking-[0.5em] font-black mb-6 opacity-20">Популярные треки</h3>
+                <div id="artist-tracks-list" class="space-y-4 mb-10"></div>
+                
+                <h3 class="text-[10px] uppercase tracking-[0.5em] font-black mb-6 opacity-20">Альбомы</h3>
+                <div id="artist-albums-list" class="flex gap-4 overflow-x-auto scrollbar-hide pb-4"></div>
+            </div>
+        </section>
+
+        <section id="screen-library" class="screen p-6">
+            <div class="flex justify-between items-end mb-8 pt-14">
+                <h3 class="text-3xl font-black">Твое</h3>
+                <button onclick="logout()" class="text-[10px] font-black uppercase opacity-20 active:opacity-100">Выход</button>
+            </div>
+
+            <!-- Оффлайн раздел (скачанное) -->
+            <div class="mb-10">
+                <div class="flex justify-between items-center mb-4">
+                    <h4 class="text-[10px] uppercase font-black opacity-20 tracking-[0.3em]">Оффлайн (Скачано)</h4>
+                </div>
+                <div id="offline-tracks-list" class="space-y-4"></div>
+            </div>
+
+            <div class="mb-10">
+                <div class="flex justify-between items-center mb-4">
+                    <h4 class="text-[10px] uppercase font-black opacity-20 tracking-[0.3em]">Подписки</h4>
+                    <button onclick="document.getElementById('vk-modal').style.display='flex'" class="text-[10px] font-black text-blue-500 uppercase">VK Free: Подключить</button>
+                </div>
+                <div id="subscriptions-list" class="flex gap-4 overflow-x-auto scrollbar-hide pb-2"></div>
+            </div>
+            
+            <div class="mb-10">
+                <h4 class="text-[10px] uppercase font-black opacity-20 tracking-[0.3em] mb-4">Любимое</h4>
+                <div id="favorites-list" class="space-y-4"></div>
+            </div>
+
+            <div>
+                <h4 class="text-[10px] uppercase font-black opacity-20 tracking-[0.3em] mb-4">История</h4>
+                <div id="listen-history-list" class="space-y-4"></div>
+            </div>
+        </section>
+
+        <div id="mini-player" class="glass rounded-[32px] p-2 flex items-center gap-3 hidden" onclick="openFullPlayer()">
+            <img id="m-img" src="" class="w-12 h-12 rounded-2xl object-cover pointer-events-none bg-zinc-800">
+            <div class="flex-1 min-w-0 pointer-events-none">
+                <h4 id="m-title" class="text-xs font-bold truncate">...</h4>
+                <p id="m-artist" class="text-[9px] opacity-40 uppercase font-black tracking-widest truncate">...</p>
+            </div>
+            <div class="flex items-center gap-1" onclick="event.stopPropagation()">
+                <button onclick="toggleFavorite(event)" id="m-fav" class="w-10 h-10 flex items-center justify-center rounded-full active:scale-90 transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+                </button>
+                <div id="m-play-btn" class="w-11 h-11 relative flex items-center justify-center">
+                    <div id="m-spinner" class="spinner absolute hidden"></div>
+                    <button onclick="togglePlay(event)" class="w-11 h-11 flex items-center justify-center bg-white text-black rounded-full active:scale-90 transition shadow-lg relative z-10">
+                        <svg id="m-icon" class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                    </button>
+                </div>
+            </div>
+            <div id="m-progress-bar"></div>
+        </div>
+
+        <div id="full-player" class="flex flex-col h-full">
+            <div class="swipe-handle shrink-0"></div>
+            <div class="flex justify-between items-center px-8 pt-6 pb-4 shrink-0">
+                <button onclick="closeFullPlayer()" class="w-12 h-12 glass rounded-2xl flex items-center justify-center active:scale-90 transition transform rotate-90">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path d="M9 5l7 7-7 7"/></svg>
+                </button>
+                <h3 class="text-[10px] font-black uppercase tracking-[0.3em] opacity-30">Сейчас играет</h3>
+                <div class="flex gap-2">
+                    <button id="room-btn" onclick="toggleRoomsModal(true)" class="w-12 h-12 glass rounded-2xl flex items-center justify-center active:scale-90 transition relative">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                        <div id="room-active-indicator" class="absolute top-2 right-2 w-2 h-2 bg-pink-500 rounded-full hidden pulse-dot"></div>
+                    </button>
+                    <button id="participants-btn" onclick="showRoomParticipants()" class="w-12 h-12 glass rounded-2xl flex items-center justify-center active:scale-90 transition hidden">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5 5.197h-6m6 0v-1a6 6 0 00-6-6"/></svg>
+                        <span id="participants-badge" class="absolute -top-1 -right-1 bg-pink-500 text-white text-[9px] font-black rounded-full w-5 h-5 flex items-center justify-center">0</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex-1 flex flex-col justify-between items-center px-8 pb-16 pt-2 overflow-hidden">
+                <div class="flex-1 w-full flex items-center justify-center min-h-0 py-4 pointer-events-none">
+                     <img id="f-img" src="" class="w-auto h-auto max-w-full max-h-full aspect-square rounded-[32px] shadow-[0_20px_60px_rgba(0,0,0,0.6)] object-cover bg-zinc-800 transition-transform duration-500 will-change-transform">
+                </div>
+                
+                <div class="w-full shrink-0 flex flex-col gap-8 mt-4">
+                    <div class="text-center w-full px-4">
+                        <!-- Добавлены две кнопки: скачать и избранное -->
+                        <div class="flex justify-center items-center gap-6 mb-2">
+                            <button id="f-download" onclick="downloadCurrentTrack(event)" class="w-10 h-10 glass rounded-full flex items-center justify-center active:scale-90 transition">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                            </button>
+                            <button id="f-fav" onclick="toggleFavorite(event)" class="w-10 h-10 glass rounded-full flex items-center justify-center active:scale-90 transition">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+                            </button>
+                        </div>
+                        <h2 id="f-title" class="text-2xl font-black mb-1 line-clamp-1">...</h2>
+                        <div class="flex items-center justify-center gap-3">
+                            <p id="f-artist" onclick="goToArtistFromPlayer()" class="opacity-40 font-black uppercase tracking-[0.4em] text-[11px] line-clamp-1 cursor-pointer">...</p>
+                            <button id="f-sub" onclick="toggleSubscribe(event)" class="subscribe-btn glass px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest active:scale-95 transition">Подписаться</button>
+                        </div>
+                    </div>
+
+                    <div class="w-full px-2">
+                        <div class="h-1.5 bg-white/10 rounded-full w-full mb-3 relative cursor-pointer group touch-none" id="progress-container" onclick="seek(event)">
+                            <div id="f-progress" class="h-full bg-white rounded-full w-0 relative will-change-transform">
+                                 <div class="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition"></div>
+                            </div>
+                        </div>
+                        <div class="flex justify-between text-[10px] font-black opacity-30 uppercase tracking-[0.2em]">
+                            <span id="f-current">0:00</span>
+                            <span id="f-duration">0:00</span>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-around w-full px-4">
+                        <button onclick="prevTrack()" class="p-4 active:opacity-50"><svg class="w-9 h-9" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg></button>
+                        <div class="relative w-20 h-20 flex items-center justify-center">
+                            <div id="f-spinner" class="spinner absolute w-12 h-12 border-4 hidden"></div>
+                            <button onclick="togglePlay()" class="w-20 h-20 bg-white text-black rounded-full flex items-center justify-center shadow-2xl active:scale-90 transition relative z-10">
+                                <svg id="f-icon" class="w-10 h-10" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                            </button>
+                        </div>
+                        <button onclick="nextTrack()" class="p-4 active:opacity-50"><svg class="w-9 h-9" fill="currentColor" viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <nav class="bottom-nav glass flex justify-around items-center px-4">
+            <button onclick="switchScreen('home')" id="nav-home" class="nav-btn active opacity-30 [&.active]:opacity-100 flex flex-col items-center gap-1 active:scale-90 transition-transform">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path d="M3 12l2-2m0 0l7-7 7-7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+                <span class="text-[8px] font-black uppercase tracking-tighter">Главная</span>
+            </button>
+            <button onclick="switchScreen('search')" id="nav-search" class="nav-btn opacity-30 [&.active]:opacity-100 flex flex-col items-center gap-1 active:scale-90 transition-transform">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                <span class="text-[8px] font-black uppercase tracking-tighter">Поиск</span>
+            </button>
+            <button onclick="switchScreen('library')" id="nav-library" class="nav-btn opacity-30 [&.active]:opacity-100 flex flex-col items-center gap-1 active:scale-90 transition-transform">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+                <span class="text-[8px] font-black uppercase tracking-tighter">Твое</span>
+            </button>
+        </nav>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, increment, collection, query, deleteDoc, serverTimestamp, arrayUnion, arrayRemove, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+          apiKey: "AIzaSyAbCEUOCG7HUcoJOavZdcHoQkVYxnOX_ro",
+          authDomain: "devo-music-b2feb.firebaseapp.com",
+          projectId: "devo-music-b2feb",
+          storageBucket: "devo-music-b2feb.firebasestorage.app",
+          messagingSenderId: "29652439944",
+          appId: "1:29652439944:web:c84f3abbda2ca4f86de03d",
+          measurementId: "G-XYLVH6MX99"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        
+        const PROXY_SERVER = "http://localhost:5000";
+
+        let currentUserId = localStorage.getItem('devo_saved_id'); 
+        let vkToken = localStorage.getItem('devo_vk_token');
+        let searchTimeout = null;
+        
+        // ================== СИСТЕМА БАЛЛОВ ДЛЯ VIBE ==================
+        let vibeScores = JSON.parse(localStorage.getItem('devo_vibe_scores') || '{}');
+        let trackPlayCounts = JSON.parse(localStorage.getItem('devo_track_plays') || '{}');
+        let vibeGenre = 'chill';
+
+        // Функция для обновления баллов трека
+        function updateVibeScore(trackId, scoreDelta) {
+            if (!trackId) return;
+            
+            vibeScores[trackId] = (vibeScores[trackId] || 0) + scoreDelta;
+            
+            // Ограничиваем баллы
+            if (vibeScores[trackId] > 100) vibeScores[trackId] = 100;
+            if (vibeScores[trackId] < -50) vibeScores[trackId] = -50;
+            
+            localStorage.setItem('devo_vibe_scores', JSON.stringify(vibeScores));
+        }
+
+        // Функция для обновления счетчика прослушиваний
+        function updateTrackPlayCount(trackId) {
+            if (!trackId) return;
+            
+            trackPlayCounts[trackId] = (trackPlayCounts[trackId] || 0) + 1;
+            localStorage.setItem('devo_track_plays', JSON.stringify(trackPlayCounts));
+        }
+
+        // Отслеживаем прослушивание для начисления баллов
+        let playStartTime = null;
+        let currentTrackId = null;
+        let playTimerInterval = null;
+
+        function startPlayTracking(track) {
+            if (!track || !track.id) return;
+            
+            // Сбрасываем предыдущий таймер
+            if (playTimerInterval) {
+                clearInterval(playTimerInterval);
+            }
+            
+            currentTrackId = track.id;
+            playStartTime = Date.now();
+            
+            // Каждые 10 секунд проверяем, сколько прослушали
+            playTimerInterval = setInterval(() => {
+                if (audio.paused || !currentTrackId) return;
+                
+                const elapsedSeconds = (Date.now() - playStartTime) / 1000;
+                
+                // Если прослушали 40 секунд или 75% трека - начисляем баллы
+                if (elapsedSeconds >= 40 || (audio.duration && elapsedSeconds >= audio.duration * 0.75)) {
+                    updateVibeScore(currentTrackId, 3);
+                    
+                    // Начисляем дополнительные баллы за повторные прослушивания
+                    const playCount = trackPlayCounts[currentTrackId] || 0;
+                    if (playCount >= 3) {
+                        updateVibeScore(currentTrackId, 5); // Бонус за частые прослушивания
+                    }
+                    
+                    // Сбрасываем таймер, чтобы не начислять повторно
+                    playStartTime = Date.now();
+                }
+            }, 10000);
+        }
+
+        function stopPlayTracking() {
+            if (playTimerInterval) {
+                clearInterval(playTimerInterval);
+                playTimerInterval = null;
+            }
+        }
+
+        // ================== OFFLINE CACHE ==================
+        let offlineTracks = JSON.parse(localStorage.getItem('devo_offline_tracks') || '[]');
+
+        window.downloadCurrentTrack = async (e) => {
+            if (e) e.stopPropagation();
+            if (currentIndex === -1 || !currentQueue[currentIndex]) return;
+            
+            const track = currentQueue[currentIndex];
+            
+            if (offlineTracks.some(t => t.id === track.id)) {
+                showToast("Трек уже сохранен");
+                return;
+            }
+
+            if (!vkToken) {
+                showToast("Подключите VK для скачивания");
+                return;
+            }
+
+            showToast("Скачивание началось...");
+            const btn = document.getElementById('f-download');
+            btn.classList.add('opacity-50');
+
+            try {
+                const searchQ = `${track.artist?.name || ''} ${track.title || ''}`.trim();
+                const response = await fetch(`${PROXY_SERVER}/vk_search?q=${encodeURIComponent(searchQ)}&token=${vkToken}`);
+                const vkData = await response.json();
+
+                if (vkData.tracks && vkData.tracks.length > 0 && vkData.tracks[0].preview) {
+                    const originalAudioUrl = vkData.tracks[0].preview;
+                    
+                    // Проксируем URL для обхода CORS
+                    const proxiedUrl = `${PROXY_SERVER}/proxy_file?url=${encodeURIComponent(originalAudioUrl)}`;
+                    
+                    const cache = await caches.open('devo-audio-cache');
+                    const audioResponse = await fetch(proxiedUrl);
+                    
+                    if (!audioResponse.ok) throw new Error('Ошибка загрузки');
+                    
+                    // Сохраняем в кэш
+                    await cache.put(`/offline-audio/${track.id}`, audioResponse.clone());
+
+                    // Добавляем трек в список оффлайн
+                    offlineTracks.unshift(track);
+                    localStorage.setItem('devo_offline_tracks', JSON.stringify(offlineTracks));
+                    
+                    renderOfflineTracks();
+                    showToast("Трек сохранен оффлайн!");
+                    
+                    btn.querySelector('svg').style.stroke = '#ff2d55';
+                } else {
+                    showToast("Не удалось найти файл для скачивания");
+                }
+            } catch (error) {
+                console.error("Download error:", error);
+                showToast("Ошибка при скачивании");
+            } finally {
+                btn.classList.remove('opacity-50');
+            }
+        };
+
+        // ИСПРАВЛЕННАЯ функция удаления из оффлайн
+        window.removeOfflineTrack = async (trackId, e) => {
+            if (e) e.stopPropagation();
+            
+            try {
+                // Удаляем из кэша
+                const cache = await caches.open('devo-audio-cache');
+                await cache.delete(`/offline-audio/${trackId}`);
+                
+                // Удаляем из списка
+                offlineTracks = offlineTracks.filter(t => t.id !== trackId);
+                localStorage.setItem('devo_offline_tracks', JSON.stringify(offlineTracks));
+                
+                // Обновляем отображение
+                renderOfflineTracks();
+                showToast("Трек удален из оффлайн");
+                
+                // Обновляем подсветку кнопки в плеере, если этот трек играет сейчас
+                if (currentIndex !== -1 && currentQueue[currentIndex]?.id === trackId) {
+                    const downloadBtn = document.getElementById('f-download');
+                    if (downloadBtn) {
+                        downloadBtn.querySelector('svg').style.stroke = 'currentColor';
+                    }
+                }
+            } catch (error) {
+                console.error("Remove error:", error);
+                showToast("Ошибка при удалении");
+            }
+        };
+
+        window.renderOfflineTracks = () => {
+            const container = document.getElementById('offline-tracks-list');
+            
+            if (offlineTracks.length === 0) {
+                container.innerHTML = '<div class="opacity-20 py-10 text-center text-[10px] font-black uppercase">Нет скачанных треков</div>';
+                return;
+            }
+            
+            container.innerHTML = offlineTracks.map((t, i) => {
+                return `
+                <div class="p-4 flex items-center gap-5 track-card offline-item active:scale-95 transition relative" data-id="${t.id}" onclick="playFromList('offline', ${i})">
+                    <img src="${t.album?.cover_medium || ''}" loading="lazy" class="w-14 h-14 rounded-2xl object-cover bg-zinc-800">
+                    <div class="flex-1 min-w-0">
+                        <h4 class="text-sm font-bold truncate-custom">${t.title || 'Unknown'}</h4>
+                        <div class="flex items-center gap-2">
+                            ${t.explicit_lyrics ? '<span class="text-[8px] border border-white/30 px-1 rounded text-white/50 font-bold">E</span>' : ''}
+                            <p class="text-[10px] opacity-30 uppercase font-black truncate-custom">${t.artist?.name || 'Unknown'}</p>
+                        </div>
+                    </div>
+                    <button onclick="removeOfflineTrack('${t.id}', event)" class="w-10 h-10 glass rounded-full flex items-center justify-center active:scale-90 transition">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                    </button>
+                </div>`}).join('');
+        };
+
+        // ================== MEDIA SESSION API ==================
+        function setupMediaSession() {
+            if ('mediaSession' in navigator) {
+                // Обработчики для управления с наушников и экрана блокировки
+                navigator.mediaSession.setActionHandler('play', () => {
+                    if (!isLoading && audio.src) {
+                        audio.play();
+                        updatePlayIcons(false);
+                        if (isRoomOwner) updateRoomPlaybackState();
+                    }
+                });
+                
+                navigator.mediaSession.setActionHandler('pause', () => {
+                    audio.pause();
+                    updatePlayIcons(true);
+                    if (isRoomOwner) updateRoomPlaybackState();
+                });
+                
+                navigator.mediaSession.setActionHandler('previoustrack', () => {
+                    prevTrack();
+                });
+                
+                navigator.mediaSession.setActionHandler('nexttrack', () => {
+                    nextTrack();
+                });
+                
+                navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+                    const skipTime = details.seekOffset || 10;
+                    audio.currentTime = Math.max(audio.currentTime - skipTime, 0);
+                    updateMediaPositionState();
+                });
+                
+                navigator.mediaSession.setActionHandler('seekforward', (details) => {
+                    const skipTime = details.seekOffset || 10;
+                    audio.currentTime = Math.min(audio.currentTime + skipTime, audio.duration);
+                    updateMediaPositionState();
+                });
+                
+                navigator.mediaSession.setActionHandler('seekto', (details) => {
+                    if (details.fastSeek && ('fastSeek' in audio)) {
+                        audio.fastSeek(details.seekTime);
+                        return;
+                    }
+                    audio.currentTime = details.seekTime;
+                    updateMediaPositionState();
+                });
+                
+                // Обработка остановки (для умных часов и т.д.)
+                navigator.mediaSession.setActionHandler('stop', () => {
+                    audio.pause();
+                    audio.currentTime = 0;
+                    updatePlayIcons(true);
+                });
+            }
+        }
+
+        function updateMediaMetadata(track) {
+            if (!('mediaSession' in navigator) || !track) return;
+            
+            // Формируем массив обложек разных размеров
+            const artwork = [];
+            
+            if (track.album?.cover_small) {
+                artwork.push({ src: track.album.cover_small, sizes: '56x56', type: 'image/jpeg' });
+            }
+            if (track.album?.cover_medium) {
+                artwork.push({ src: track.album.cover_medium, sizes: '250x250', type: 'image/jpeg' });
+            }
+            if (track.album?.cover_big) {
+                artwork.push({ src: track.album.cover_big, sizes: '500x500', type: 'image/jpeg' });
+            }
+            if (track.album?.cover_xl) {
+                artwork.push({ src: track.album.cover_xl, sizes: '1000x1000', type: 'image/jpeg' });
+            }
+            
+            // Если нет обложек через Deezer, используем заглушку
+            if (artwork.length === 0) {
+                artwork.push({ src: 'https://via.placeholder.com/500/ff2d55/ffffff?text=DEVO', sizes: '500x500', type: 'image/jpeg' });
+            }
+            
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: track.title || 'Unknown Track',
+                artist: track.artist?.name || 'Unknown Artist',
+                album: track.album?.title || 'DEVO Music',
+                artwork: artwork
+            });
+            
+            // Устанавливаем состояние воспроизведения
+            navigator.mediaSession.playbackState = audio.paused ? 'paused' : 'playing';
+        }
+
+        function updateMediaPositionState() {
+            if (!('mediaSession' in navigator) || !audio.duration || !isFinite(audio.duration)) return;
+            
+            navigator.mediaSession.setPositionState({
+                duration: audio.duration,
+                playbackRate: audio.playbackRate,
+                position: audio.currentTime
+            });
+        }
+
+        // ================== SERVICE WORKER ДЛЯ PUSH-УВЕДОМЛЕНИЙ И ОФФЛАЙН ==================
+        function registerServiceWorker() {
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('sw.js')
+                    .then((registration) => {
+                        console.log('[SW] Service Worker зарегистрирован:', registration.scope);
+                        
+                        // Проверяем обновления Service Worker
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    console.log('[SW] Доступно обновление');
+                                }
+                            });
+                        });
+                    })
+                    .catch((error) => {
+                        console.error('[SW] Ошибка регистрации Service Worker:', error);
+                    });
+                    
+                // Запрашиваем разрешение на уведомления
+                if ('Notification' in window) {
+                    Notification.requestPermission();
+                }
+            }
+        }
+
+        // ================== ПОКАЗ УВЕДОМЛЕНИЯ ==================
+        function showMusicNotification(track, isPlaying = true) {
+            if (!('Notification' in window) || Notification.permission !== 'granted') return;
+            
+            const title = isPlaying ? 'Сейчас играет' : 'На паузе';
+            const body = isPlaying ? `${track.title} - ${track.artist?.name}` : 'Воспроизведение приостановлено';
+            
+            const notification = new Notification(title, {
+                body: body,
+                icon: track.album?.cover_medium || 'https://via.placeholder.com/192/ff2d55/ffffff?text=DEVO',
+                badge: 'https://via.placeholder.com/72/ff2d55/ffffff?text=DEVO',
+                image: track.album?.cover_xl || track.album?.cover_big,
+                vibrate: [200, 100, 200],
+                silent: true,
+                requireInteraction: false,
+                actions: [
+                    {action: 'prev', title: '⏮ Предыдущий'},
+                    {action: 'playpause', title: isPlaying ? '⏸ Пауза' : '▶ Воспроизвести'},
+                    {action: 'next', title: '⏭ Следующий'}
+                ],
+                tag: 'music-playback',
+                renotify: true
+            });
+            
+            notification.onclick = (event) => {
+                event.preventDefault();
+                window.focus();
+                notification.close();
+            };
+            
+            notification.onaction = (event) => {
+                switch(event.action) {
+                    case 'prev':
+                        prevTrack();
+                        break;
+                    case 'playpause':
+                        togglePlay();
+                        break;
+                    case 'next':
+                        nextTrack();
+                        break;
+                }
+            };
+        }
+
+        // ================== ОБРАБОТКА КЛАВИАТУРЫ ==================
+        document.addEventListener('keydown', (e) => {
+            // Управление с клавиатуры (для десктопа)
+            if (e.code === 'Space' && e.target === document.body) {
+                e.preventDefault();
+                togglePlay();
+            } else if (e.code === 'ArrowLeft' && e.ctrlKey) {
+                e.preventDefault();
+                prevTrack();
+            } else if (e.code === 'ArrowRight' && e.ctrlKey) {
+                e.preventDefault();
+                nextTrack();
+            }
+        });
+
+        // ================== СОЗДАНИЕ MANIFEST.JSON ==================
+        function createManifest() {
+            const manifest = {
+                name: 'DEVO Music Pro',
+                short_name: 'DEVO',
+                description: 'Музыкальный плеер с VK Music и Deezer',
+                start_url: '/',
+                display: 'standalone',
+                background_color: '#030303',
+                theme_color: '#ff2d55',
+                orientation: 'portrait',
+                icons: [
+                    {
+                        src: 'https://via.placeholder.com/192/ff2d55/ffffff?text=DEVO',
+                        sizes: '192x192',
+                        type: 'image/png',
+                        purpose: 'any maskable'
+                    },
+                    {
+                        src: 'https://via.placeholder.com/512/ff2d55/ffffff?text=DEVO',
+                        sizes: '512x512',
+                        type: 'image/png',
+                        purpose: 'any maskable'
+                    }
+                ]
+            };
+            
+            // Сохраняем манифест
+            const manifestBlob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
+            const manifestURL = URL.createObjectURL(manifestBlob);
+            
+            // Добавляем ссылку на манифест, если её нет
+            if (!document.querySelector('link[rel="manifest"]')) {
+                const link = document.createElement('link');
+                link.rel = 'manifest';
+                link.href = manifestURL;
+                document.head.appendChild(link);
+            }
+        }
+
+        // ================== ИНИЦИАЛИЗАЦИЯ ПРИ ЗАГРУЗКЕ ==================
+        window.addEventListener('load', () => {
+            // Создаем PWA манифест
+            createManifest();
+            
+            // Регистрируем Service Worker
+            registerServiceWorker();
+            
+            // Настраиваем Media Session
+            setupMediaSession();
+            
+            // Проверяем оффлайн-режим для Telegram Mini App
+            if (window.Telegram && Telegram.WebApp) {
+                Telegram.WebApp.ready();
+                Telegram.WebApp.expand();
+            }
+        });
+
+        window.saveVkToken = () => {
+            let input = document.getElementById('vk-token-input').value;
+            if (input.includes('access_token=')) {
+                vkToken = input.split('access_token=')[1].split('&')[0];
+            } else {
+                vkToken = input.trim();
+            }
+            if (vkToken.length > 20) {
+                localStorage.setItem('devo_vk_token', vkToken);
+                document.getElementById('vk-modal').style.display = 'none';
+                showToast("VK Подключен!");
+            } else {
+                showToast("Неверный токен");
+            }
+        };
+
+        let favorites = [];
+        let subscriptions = [];
+        let listenHistory = [];
+        let history = JSON.parse(localStorage.getItem('devo_search_history') || '[]');
+        let currentQueue = [];
+        let currentIndex = -1;
+        const audio = new Audio();
+        audio.preload = 'auto'; 
+        let activeBgLayer = 1;
+        let isLoading = false;
+        let unsubscribeUser = null;
+        let unsubscribeArtistStats = null;
+        let currentArtist = null;
+        let vibeQueue = [];
+        let vibeIndex = -1;
+        let isVibeMode = false;
+        let mediaSession = null;
+
+        // ================== СОСТОЯНИЕ КОМНАТ ==================
+        let currentRoomId = null;
+        let isRoomOwner = false;
+        let roomPassword = '';
+        let roomParticipants = [];
+        let unsubscribeRoom = null;
+        let unsubscribeRoomsList = null;
+        let unsubscribeParticipants = null;
+
+        const miniPlayer = document.getElementById('mini-player');
+        const fullPlayer = document.getElementById('full-player');
+        let touchStart = { x: 0, y: 0 };
+        let isSwipingFullPlayer = false;
+
+        // ================== ФУНКЦИИ КОМНАТ ==================
+        window.toggleRoomsModal = (show) => {
+            const modal = document.getElementById('rooms-modal');
+            if(show) { 
+                modal.classList.add('active'); 
+                listenRooms();
+                updateMyRoomUI();
+            } else { 
+                modal.classList.remove('active'); 
+                if (unsubscribeRoomsList) {
+                    unsubscribeRoomsList();
+                    unsubscribeRoomsList = null;
+                }
+            }
+        };
+
+        window.createRoom = async () => {
+            if (!currentUserId) return;
+            
+            const password = document.getElementById('room-password-input').value.trim();
+            const roomRef = doc(db, 'rooms', currentUserId);
+            
+            const track = currentQueue[currentIndex] || null;
+            const roomData = {
+                ownerId: currentUserId,
+                ownerName: 'DJ ' + currentUserId.substring(0, 4),
+                track: track ? { 
+                    title: track.title, 
+                    artist: track.artist.name, 
+                    cover: track.album?.cover_medium || '',
+                    id: track.id,
+                    position: audio.currentTime || 0,
+                    isPlaying: !audio.paused
+                } : null,
+                password: password || null,
+                isPrivate: !!password,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+                participants: [currentUserId],
+                participantCount: 1
+            };
+            
+            await setDoc(roomRef, roomData);
+            
+            currentRoomId = currentUserId;
+            isRoomOwner = true;
+            roomPassword = password;
+            
+            // Подписываемся на изменения комнаты
+            listenToMyRoom();
+            
+            updateMyRoomUI(roomData);
+            showToast("Комната создана!");
+        };
+
+        function listenToMyRoom() {
+            if (!currentUserId || !currentRoomId) return;
+            
+            const roomRef = doc(db, 'rooms', currentRoomId);
+            
+            if (unsubscribeRoom) unsubscribeRoom();
+            
+            unsubscribeRoom = onSnapshot(roomRef, (snap) => {
+                if (!snap.exists()) {
+                    // Комната удалена
+                    currentRoomId = null;
+                    isRoomOwner = false;
+                    updateMyRoomUI();
+                    showToast("Комната закрыта");
+                    return;
+                }
+                
+                const data = snap.data();
+                updateMyRoomUI(data);
+                
+                // Если я не владелец, синхронизирую воспроизведение
+                if (!isRoomOwner && data.track) {
+                    syncWithRoom(data.track);
+                }
+                
+                // Обновляем список участников в UI
+                updateParticipantsUI(data.participants || [currentUserId]);
+            });
+        }
+
+        function updateMyRoomUI(roomData = null) {
+            const dot = document.getElementById('room-status-dot');
+            const nowPlaying = document.getElementById('room-now-playing');
+            const controlsInactive = document.getElementById('room-controls-inactive');
+            const controlsActive = document.getElementById('room-controls-active');
+            const roomIndicator = document.getElementById('room-active-indicator');
+            const participantsBtn = document.getElementById('participants-btn');
+            const passwordInput = document.getElementById('room-password-input');
+            
+            if (roomData) {
+                // Комната активна
+                dot.classList.remove('bg-zinc-500');
+                dot.classList.add('bg-green-500', 'pulse-dot');
+                roomIndicator.classList.remove('hidden');
+                participantsBtn.classList.remove('hidden');
+                
+                document.getElementById('room-listeners').textContent = 
+                    `${roomData.participantCount || 1} СЛУШАТЕЛЕЙ`;
+                
+                // Показываем информацию о треке
+                if (roomData.track) {
+                    nowPlaying.classList.remove('hidden');
+                    document.getElementById('room-track-title').textContent = roomData.track.title;
+                    document.getElementById('room-track-artist').textContent = roomData.track.artist;
+                    document.getElementById('room-track-cover').src = roomData.track.cover;
+                }
+                
+                // Показываем активные контролы
+                controlsInactive.classList.add('hidden');
+                controlsActive.classList.remove('hidden');
+                
+                // Обновляем кнопку приватности
+                const privacyBtn = document.getElementById('room-privacy-btn');
+                if (roomData.isPrivate) {
+                    privacyBtn.innerHTML = '🔒 Приватная';
+                    privacyBtn.classList.add('bg-pink-500/20');
+                    passwordInput.value = roomData.password || '';
+                } else {
+                    privacyBtn.innerHTML = '🌐 Публичная';
+                    privacyBtn.classList.remove('bg-pink-500/20');
+                    passwordInput.value = '';
+                }
+                
+            } else {
+                // Комната не активна
+                dot.classList.remove('bg-green-500', 'pulse-dot');
+                dot.classList.add('bg-zinc-500');
+                roomIndicator.classList.add('hidden');
+                participantsBtn.classList.add('hidden');
+                
+                document.getElementById('room-listeners').textContent = '0 СЛУШАТЕЛЕЙ';
+                
+                // Скрываем информацию о треке
+                nowPlaying.classList.add('hidden');
+                
+                // Показываем неактивные контролы
+                controlsInactive.classList.remove('hidden');
+                controlsActive.classList.add('hidden');
+            }
+        }
+
+        function syncWithRoom(trackData) {
+            if (!trackData || !trackData.id) return;
+            
+            // Проверяем, не играет ли уже этот трек
+            const currentTrack = currentQueue[currentIndex];
+            if (currentTrack && currentTrack.id === trackData.id) {
+                // Синхронизируем позицию
+                const timeDiff = Math.abs(audio.currentTime - trackData.position);
+                if (timeDiff > 2) { // Если разница больше 2 секунд
+                    audio.currentTime = trackData.position;
+                }
+                
+                // Синхронизируем play/pause
+                if (trackData.isPlaying && audio.paused) {
+                    audio.play();
+                } else if (!trackData.isPlaying && !audio.paused) {
+                    audio.pause();
+                }
+            } else {
+                // Ищем трек в текущей очереди
+                const trackIndex = currentQueue.findIndex(t => t.id === trackData.id);
+                if (trackIndex !== -1) {
+                    currentIndex = trackIndex;
+                    loadTrackHybrid(currentQueue[trackIndex]);
+                    setTimeout(() => {
+                        audio.currentTime = trackData.position;
+                        if (trackData.isPlaying) audio.play();
+                    }, 500);
+                }
+            }
+        }
+
+        window.toggleRoomPrivacy = async () => {
+            if (!currentRoomId || !isRoomOwner) return;
+            
+            const roomRef = doc(db, 'rooms', currentRoomId);
+            const passwordInput = document.getElementById('room-password-input');
+            const currentPassword = passwordInput.value.trim();
+            
+            const newIsPrivate = !!(currentPassword);
+            
+            await updateDoc(roomRef, {
+                isPrivate: newIsPrivate,
+                password: currentPassword || null,
+                updatedAt: serverTimestamp()
+            });
+            
+            showToast(newIsPrivate ? "Комната теперь приватная" : "Комната теперь публичная");
+        };
+
+        window.copyRoomLink = () => {
+            if (!currentRoomId) return;
+            
+            const link = `${window.location.origin}?join=${currentRoomId}`;
+            const tempInput = document.createElement('input');
+            tempInput.value = link;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempInput);
+            
+            showToast("Ссылка скопирована");
+        };
+
+        window.leaveRoom = async () => {
+            if (!currentRoomId) return;
+            
+            if (isRoomOwner) {
+                // Если я владелец - удаляю комнату
+                const roomRef = doc(db, 'rooms', currentRoomId);
+                await deleteDoc(roomRef);
+                showToast("Комната закрыта");
+            } else {
+                // Если я участник - удаляю себя из списка
+                const roomRef = doc(db, 'rooms', currentRoomId);
+                await updateDoc(roomRef, {
+                    participants: arrayRemove(currentUserId),
+                    participantCount: increment(-1),
+                    updatedAt: serverTimestamp()
+                });
+                showToast("Вы вышли из комнаты");
+            }
+            
+            // Очищаем состояние
+            currentRoomId = null;
+            isRoomOwner = false;
+            
+            if (unsubscribeRoom) {
+                unsubscribeRoom();
+                unsubscribeRoom = null;
+            }
+            
+            updateMyRoomUI();
+        };
+
+        function listenRooms() {
+            if (unsubscribeRoomsList) return;
+            
+            const roomsRef = collection(db, 'rooms');
+            unsubscribeRoomsList = onSnapshot(roomsRef, (snapshot) => {
+                const list = document.getElementById('active-rooms-list');
+                const rooms = [];
+                
+                snapshot.forEach(doc => {
+                    if (doc.id !== currentUserId) {
+                        rooms.push({
+                            id: doc.id,
+                            ...doc.data()
+                        });
+                    }
+                });
+                
+                if (rooms.length === 0) {
+                    list.innerHTML = '<div class="text-center py-8 opacity-20 text-[10px] uppercase font-black">Никто не слушает</div>';
+                    return;
+                }
+                
+                list.innerHTML = rooms.map(room => `
+                    <div class="glass p-4 rounded-2xl flex items-center gap-4 active:scale-95 transition" onclick="joinRoom('${room.id}', ${room.isPrivate})">
+                        <div class="relative">
+                            <img src="${room.track?.cover || ''}" class="w-12 h-12 rounded-xl bg-zinc-800 object-cover">
+                            ${room.isPrivate ? '<div class="absolute -top-1 -right-1 bg-pink-500 w-4 h-4 rounded-full flex items-center justify-center"><svg class="w-2 h-2" fill="white" viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg></div>' : ''}
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 mb-1">
+                                <p class="text-[10px] font-black uppercase tracking-widest truncate">${room.ownerName}</p>
+                                <span class="text-[8px] bg-white/10 px-1.5 py-0.5 rounded-full">DJ</span>
+                            </div>
+                            <p class="text-xs font-bold truncate">${room.track ? room.track.title : 'Пауза'}</p>
+                            <p class="text-[10px] opacity-40 truncate">${room.track ? room.track.artist : 'Нет трека'}</p>
+                        </div>
+                        <div class="flex flex-col items-end">
+                            <div class="flex items-center gap-1 opacity-40">
+                                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                                <span class="text-[9px] font-black">${room.participantCount || 1}</span>
+                            </div>
+                            <span class="text-[8px] opacity-20 mt-1">${room.isPrivate ? '🔒' : '🌐'}</span>
+                        </div>
+                    </div>
+                `).join('');
+            });
+        }
+
+        window.joinRoom = async (roomId, isPrivate = false) => {
+            if (currentRoomId) {
+                showToast("Сначала выйдите из текущей комнаты");
+                return;
+            }
+            
+            if (isPrivate) {
+                // Сохраняем ID комнаты для ввода пароля
+                window.pendingRoomJoin = roomId;
+                document.getElementById('room-password-modal').style.display = 'flex';
+                return;
+            }
+            
+            await joinRoomInternal(roomId);
+        };
+
+        window.joinRoomWithPassword = async () => {
+            const password = document.getElementById('room-password-enter').value.trim();
+            const roomId = window.pendingRoomJoin;
+            
+            if (!roomId) return;
+            
+            // Проверяем пароль
+            const roomRef = doc(db, 'rooms', roomId);
+            const roomSnap = await getDoc(roomRef);
+            
+            if (!roomSnap.exists()) {
+                showToast("Комната не найдена");
+                return;
+            }
+            
+            const roomData = roomSnap.data();
+            
+            if (roomData.password && roomData.password !== password) {
+                showToast("Неверный пароль");
+                return;
+            }
+            
+            await joinRoomInternal(roomId);
+            closePasswordModal();
+        };
+
+        async function joinRoomInternal(roomId) {
+            const roomRef = doc(db, 'rooms', roomId);
+            
+            // Добавляем себя в участники
+            await updateDoc(roomRef, {
+                participants: arrayUnion(currentUserId),
+                participantCount: increment(1),
+                updatedAt: serverTimestamp()
+            });
+            
+            currentRoomId = roomId;
+            isRoomOwner = false;
+            
+            // Подписываемся на изменения комнаты
+            listenToMyRoom();
+            
+            showToast("Вы присоединились к комнате");
+            toggleRoomsModal(false);
+        }
+
+        function updateParticipantsUI(participants) {
+            const badge = document.getElementById('participants-badge');
+            const count = participants.length;
+            
+            badge.textContent = count;
+            
+            // Обновляем модальное окно участников, если оно открыто
+            const participantsModal = document.getElementById('room-participants-modal');
+            if (participantsModal.style.display === 'flex') {
+                showRoomParticipants();
+            }
+        }
+
+        window.showRoomParticipants = () => {
+            if (!currentRoomId) return;
+            
+            const roomRef = doc(db, 'rooms', currentRoomId);
+            getDoc(roomRef).then(snap => {
+                if (!snap.exists()) return;
+                
+                const data = snap.data();
+                const participants = data.participants || [];
+                
+                document.getElementById('participants-count').textContent = 
+                    `${participants.length} участников`;
+                
+                const list = document.getElementById('room-participants-list');
+                list.innerHTML = participants.map((pid, index) => `
+                    <div class="glass p-4 rounded-2xl flex items-center justify-between room-participant">
+                        <div class="flex items-center gap-3">
+                            <div class="relative">
+                                <div class="w-10 h-10 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center text-white font-black">
+                                    ${pid.substring(0, 2).toUpperCase()}
+                                </div>
+                                ${index === 0 ? '<div class="dj-crown">👑</div>' : ''}
+                            </div>
+                            <div>
+                                <p class="text-xs font-bold">${pid === currentUserId ? 'Вы' : (pid === data.ownerId ? data.ownerName : 'Участник ' + pid.substring(0, 4))}</p>
+                                <p class="text-[10px] opacity-40">${pid === data.ownerId ? 'Владелец комнаты' : 'Слушатель'}</p>
+                            </div>
+                        </div>
+                        ${pid === currentUserId ? '<span class="text-[10px] bg-pink-500/20 text-pink-300 px-2 py-1 rounded-full">Вы</span>' : ''}
+                    </div>
+                `).join('');
+                
+                document.getElementById('room-participants-modal').style.display = 'flex';
+            });
+        };
+
+        window.closePasswordModal = () => {
+            document.getElementById('room-password-modal').style.display = 'none';
+            document.getElementById('room-password-enter').value = '';
+            delete window.pendingRoomJoin;
+        };
+
+        window.closeParticipantsModal = () => {
+            document.getElementById('room-participants-modal').style.display = 'none';
+        };
+
+        window.refreshRoomsList = () => {
+            if (unsubscribeRoomsList) {
+                unsubscribeRoomsList();
+                unsubscribeRoomsList = null;
+            }
+            listenRooms();
+            showToast("Список обновлен");
+        };
+
+        // Обновляем трек в комнате при изменении
+        async function updateRoomTrack(track) {
+            if (!currentRoomId || !isRoomOwner) return;
+            
+            const roomRef = doc(db, 'rooms', currentRoomId);
+            await updateDoc(roomRef, {
+                track: {
+                    title: track.title,
+                    artist: track.artist.name,
+                    cover: track.album?.cover_medium || '',
+                    id: track.id,
+                    position: audio.currentTime,
+                    isPlaying: !audio.paused
+                },
+                updatedAt: serverTimestamp()
+            });
+        }
+
+        // Обновляем состояние воспроизведения в комнате
+        async function updateRoomPlaybackState() {
+            if (!currentRoomId || !isRoomOwner || currentIndex === -1) return;
+            
+            const track = currentQueue[currentIndex];
+            const roomRef = doc(db, 'rooms', currentRoomId);
+            
+            await updateDoc(roomRef, {
+                'track.position': audio.currentTime,
+                'track.isPlaying': !audio.paused,
+                updatedAt: serverTimestamp()
+            });
+        }
+
+        // ================== ПОИСК ЧЕРЕЗ VK MUSIC ==================
+        async function searchVK(query) {
+            if (!vkToken) {
+                showToast("Сначала подключите VK токен");
+                return [];
+            }
+            
+            try {
+                const response = await fetch(`${PROXY_SERVER}/vk_search?q=${encodeURIComponent(query)}&token=${vkToken}&count=30`);
+                const data = await response.json();
+                
+                if (data.error) {
+                    console.error("VK search error:", data.error);
+                    return [];
+                }
+                
+                return data.tracks || [];
+            } catch (error) {
+                console.error("VK search fetch error:", error);
+                return [];
+            }
+        }
+
+        // ================== DEEZER ДЛЯ ТРЕНДОВ И РЕКОМЕНДАЦИЙ ==================
+        window.fetchDeezer = (url, callback) => {
+            const cb = 'dz_' + Math.random().toString(36).slice(2, 10);
+            window[cb] = (d) => { callback(d); delete window[cb]; document.getElementById(cb)?.remove(); };
+            const s = document.createElement('script'); s.id = cb;
+            s.src = `${url}${url.includes('?') ? '&' : '?'}output=jsonp&callback=${cb}`;
+            document.body.appendChild(s);
+        };
+
+        // ================== ОСТАЛЬНОЙ КОД ==================
+        window.showInitial = () => {
+            document.getElementById('auth-initial').classList.remove('hidden');
+            document.getElementById('auth-register').classList.add('hidden');
+            document.getElementById('auth-login').classList.add('hidden');
+        };
+
+        window.showRegister = () => {
+            document.getElementById('auth-initial').classList.add('hidden');
+            document.getElementById('auth-register').classList.remove('hidden');
+            if (auth.currentUser) setupNewUser(auth.currentUser.uid);
+            else signInAnonymously(auth).then(cred => setupNewUser(cred.user.uid));
+        };
+
+        function setupNewUser(uid) {
+            currentUserId = uid; document.getElementById('reg-id-display').innerText = uid;
+            localStorage.setItem('devo_saved_id', uid);
+        }
+
+        window.showLogin = () => {
+            document.getElementById('auth-initial').classList.add('hidden');
+            document.getElementById('auth-login').classList.remove('hidden');
+        };
+
+        window.performLogin = async () => {
+            const inputId = document.getElementById('login-id-input').value.trim();
+            if (inputId.length > 5) {
+                currentUserId = inputId; localStorage.setItem('devo_saved_id', inputId);
+                if (!auth.currentUser) await signInAnonymously(auth);
+                initializeUserData(); hideAuthOverlay(); showToast("Профиль загружен");
+            } else showToast("Неверный формат ID");
+        };
+
+        function hideAuthOverlay() {
+            const overlay = document.getElementById('auth-overlay');
+            overlay.style.opacity = '0'; setTimeout(() => overlay.style.display = 'none', 600);
+        }
+
+        window.completeAuth = () => {
+            if (currentUserId) { localStorage.setItem('devo_saved_id', currentUserId); initializeUserData(); hideAuthOverlay(); }
+        };
+
+        window.logout = () => { 
+            if (currentRoomId) leaveRoom();
+            auth.signOut(); localStorage.removeItem('devo_saved_id'); location.reload(); 
+        };
+
+        onAuthStateChanged(auth, (u) => {
+            if (currentUserId) { if (!u) signInAnonymously(auth); hideAuthOverlay(); initializeUserData(); }
+            else { document.getElementById('auth-overlay').style.display = 'flex'; document.getElementById('auth-overlay').style.opacity = '1'; }
+        });
+
+        function initializeUserData() {
+            if (!currentUserId) return;
+            document.getElementById('user-id-display').innerText = `ID: ${currentUserId.substring(0,8)}...`;
+            if (unsubscribeUser) unsubscribeUser();
+            unsubscribeUser = onSnapshot(doc(db, 'users', currentUserId), (snap) => {
+                const data = snap.exists() ? snap.data() : {};
+                favorites = data.favorites || []; subscriptions = data.subscriptions || []; listenHistory = data.history || [];
+                renderFavorites(); renderListenHistory(); renderSubscriptions(); updateUI();
+                analyzeUserPreferences();
+            });
+            
+            // Настраиваем Media Session
+            setupMediaSession();
+            
+            initMoods(); loadTrending('0'); loadRecommendations(); renderHistory(); renderOfflineTracks();
+        }
+
+        function analyzeUserPreferences() {
+            if (favorites.length === 0 && listenHistory.length === 0) return;
+            
+            const allTracks = [...favorites, ...listenHistory];
+            const genreCount = {};
+            const artistCount = {};
+            
+            const genreKeywords = {
+                'pop': ['pop', 'танцевальн', 'хит'],
+                'rap': ['rap', 'хип-хоп', 'рэп'],
+                'rock': ['rock', 'рок', 'гитар'],
+                'dance': ['dance', 'электро', 'house', 'техно'],
+                'chill': ['chill', 'лёгк', 'релакс'],
+                'sad': ['sad', 'груст', 'медлен'],
+                'workout': ['workout', 'спорт', 'энерг', 'pump'],
+                'lofi': ['lofi', 'лоуфай'],
+                'metal': ['metal', 'метал', 'тяжел']
+            };
+            
+            allTracks.forEach(track => {
+                const title = track.title?.toLowerCase() || '';
+                const artist = track.artist?.name?.toLowerCase() || '';
+                
+                for (const [genre, keywords] of Object.entries(genreKeywords)) {
+                    if (keywords.some(keyword => title.includes(keyword) || artist.includes(keyword))) {
+                        genreCount[genre] = (genreCount[genre] || 0) + 1;
+                    }
+                }
+                
+                artistCount[artist] = (artistCount[artist] || 0) + 1;
+            });
+            
+            let topGenre = '';
+            let maxCount = 0;
+            for (const [genre, count] of Object.entries(genreCount)) {
+                if (count > maxCount) {
+                    maxCount = count;
+                    topGenre = genre;
+                }
+            }
+            
+            vibeGenre = topGenre || 'chill';
+        }
+
+        // ИСПРАВЛЕННАЯ функция для VIBE с системой баллов
+        window.startVibePlaylist = async () => {
+            isVibeMode = true;
+            showToast("Запускаю ваш VIBE...");
+            await loadVibeTracks();
+            
+            if (vibeQueue.length > 0) {
+                // Сортируем треки по баллам (высокий балл = чаще в начале)
+                vibeQueue.sort((a, b) => {
+                    const scoreA = vibeScores[a.id] || 0;
+                    const scoreB = vibeScores[b.id] || 0;
+                    return scoreB - scoreA;
+                });
+                
+                vibeIndex = 0;
+                currentQueue = vibeQueue;
+                currentIndex = 0;
+                await loadTrackHybrid(vibeQueue[0]);
+            } else {
+                showToast("Не удалось создать плейлист VIBE");
+                isVibeMode = false;
+            }
+        };
+
+        async function loadVibeTracks() {
+            try {
+                let searchQuery = vibeGenre;
+                const favoriteArtists = favorites
+                    .slice(0, 3)
+                    .map(t => t.artist?.name)
+                    .filter(Boolean)
+                    .join(' ');
+                
+                if (favoriteArtists) {
+                    searchQuery += ' ' + favoriteArtists;
+                }
+                
+                // Загружаем из Deezer для обложек и метаданных
+                fetchDeezer(`https://api.deezer.com/search?q=${encodeURIComponent(searchQuery)}&limit=100`, (data) => {
+                    if (data.data && data.data.length > 0) {
+                        // Фильтруем треки с низкими баллами (если баллы ниже -30, исключаем)
+                        const filteredTracks = data.data.filter(track => {
+                            const score = vibeScores[track.id] || 0;
+                            return score > -30;
+                        });
+                        
+                        // Сортируем по баллам
+                        filteredTracks.sort((a, b) => {
+                            const scoreA = vibeScores[a.id] || 0;
+                            const scoreB = vibeScores[b.id] || 0;
+                            return scoreB - scoreA;
+                        });
+                        
+                        vibeQueue = filteredTracks.slice(0, 30).map(t => ({...t, source: 'deezer'}));
+                        
+                        if (isVibeMode && vibeIndex === -1) {
+                            startVibePlaylist();
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error("Ошибка загрузки VIBE треков:", error);
+            }
+        }
+
+        const MOODS = [
+            { id: '0', name: 'Все', q: '' }, { id: 'pop', name: 'Поп', q: 'pop' }, { id: 'rap', name: 'Рэп', q: 'rap' }, { id: 'rock', name: 'Рок', q: 'rock' }, { id: 'dance', name: 'Дэнс', q: 'dance' }, { id: 'chill', name: 'Чилл', q: 'chill' }, { id: 'sad', name: 'Грусть', q: 'sad' }, { id: 'workout', name: 'Спорт', q: 'workout' }, { id: 'lofi', name: 'Lo-Fi', q: 'lofi' }, { id: 'metal', name: 'Метал', q: 'metal' }
+        ];
+
+        function initMoods() {
+            document.getElementById('mood-selector').innerHTML = MOODS.map(m => `
+                <button onclick="selectMood('${m.id}', '${m.q}', this)" class="mood-chip px-5 py-2.5 rounded-full glass text-[11px] font-bold ${m.id === '0' ? 'active' : ''} active:scale-95">
+                    ${m.name}
+                </button>`).join('');
+        }
+
+        window.selectMood = (id, query, btn) => {
+            document.querySelectorAll('.mood-chip').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('trending-list').innerHTML = '<div class="spinner mx-auto self-center"></div>';
+            if (id === '0') { document.getElementById('trends-title').innerText = "Тренды"; loadTrending('0'); }
+            else { document.getElementById('trends-title').innerText = btn.innerText; loadMoodTracks(query); }
+        };
+
+        function loadTrending(chartId) {
+            fetchDeezer(`https://api.deezer.com/chart/${chartId}/tracks?limit=30`, (data) => {
+                window.trendingTracks = data.data.map(t => ({...t, source: 'deezer'})); renderTrending(window.trendingTracks);
+            });
+        }
+
+        function loadMoodTracks(query) {
+             fetchDeezer(`https://api.deezer.com/search?q=${query}&limit=40`, (data) => {
+                window.trendingTracks = data.data.map(t => ({...t, source: 'deezer'})); renderTrending(window.trendingTracks);
+            });
+        }
+
+        function renderTrending(tracks) {
+             const currentId = currentQueue[currentIndex]?.id;
+             const currentImg = currentQueue[currentIndex]?.album?.cover_xl || currentQueue[currentIndex]?.album?.cover_medium || (tracks && tracks[0]?.album?.cover_medium) || '';
+             const blobStyle = `background-image: url('${currentImg}'); background-size: cover; background-position: center; filter: blur(50px) brightness(0.6) saturate(1.8); transition: background-image 1.2s ease; will-change: background-image; transform: translate3d(0,0,0);`;
+             const vibeHTML = `
+                <div class="trending-item active:scale-95 transition" onclick="startVibePlaylist()">
+                    <div class="w-full aspect-square rounded-[42px] mb-4 relative overflow-hidden bg-black/50 border border-white/10 group z-0">
+                        <div id="vibe-blob-1" class="absolute inset-[-40%] rounded-full vibe-circle-1 mix-blend-screen opacity-80" style="${blobStyle}"></div>
+                        <div id="vibe-blob-2" class="absolute inset-[-40%] rounded-full vibe-circle-2 mix-blend-screen opacity-60" style="${blobStyle} animation-delay: -3.5s;"></div>
+                        <div class="absolute inset-0 flex flex-col items-center justify-center z-10 backdrop-blur-[4px]">
+                            <div class="p-3 bg-white/10 rounded-full mb-2 backdrop-blur-md border border-white/20"><svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg></div>
+                            <h3 class="text-xl font-black italic tracking-tighter text-white leading-none text-center">МОЙ<br>VIBE</h3>
+                        </div>
+                    </div>
+                     <div class="px-2"><span class="text-[13px] font-bold">Персональный микс</span><span class="text-[10px] opacity-30 uppercase font-black truncate-custom block">AI Selection</span></div>
+                </div>`;
+            const tracksHTML = tracks.map((t, i) => {
+                const isOffline = offlineTracks.some(off => off.id === t.id);
+                return `
+                <div class="trending-item active:scale-95 transition ${t.id == currentId ? 'active-track' : ''}" data-id="${t.id}" onclick="playFromList('trending', ${i})">
+                    <img src="${t.album.cover_medium}" loading="lazy" class="w-full aspect-square rounded-[42px] mb-4 shadow-2xl object-cover transition-all bg-zinc-800">
+                    <div class="px-2">
+                        <span class="text-[13px] font-bold truncate-custom">${t.title} ${isOffline ? '⬇️' : ''}</span>
+                        <span class="text-[10px] opacity-30 uppercase font-black truncate-custom" onclick="event.stopPropagation(); openArtist(${t.artist.id})">${t.artist.name}</span>
+                    </div>
+                </div>`}).join('');
+            document.getElementById('trending-list').innerHTML = vibeHTML + tracksHTML; updateUI();
+        }
+
+        function loadRecommendations() {
+            fetchDeezer('https://api.deezer.com/search?q=top+hits&limit=25', (data) => {
+                window.recommendTracks = data.data.map(t => ({...t, source: 'deezer'}));
+                renderTracks('recommend-list', window.recommendTracks, 'recommend'); updateUI();
+            });
+        }
+
+        function renderTracks(containerId, tracks, type) {
+            const currentId = currentQueue[currentIndex]?.id;
+            document.getElementById(containerId).innerHTML = tracks.map((t, i) => {
+                const isOffline = offlineTracks.some(off => off.id === t.id);
+                return `
+                <div class="p-4 flex items-center gap-5 track-card active:scale-95 transition ${t.id == currentId ? 'active-track' : ''}" data-id="${t.id}" onclick="playFromList('${type}', ${i})">
+                    <img src="${t.album?.cover_medium || ''}" loading="lazy" class="w-14 h-14 rounded-2xl object-cover bg-zinc-800">
+                    <div class="flex-1 min-w-0">
+                        <h4 class="text-sm font-bold truncate-custom">${t.title || 'Unknown'} ${isOffline ? '⬇️' : ''}</h4>
+                        <div class="flex items-center gap-2">
+                            ${t.explicit_lyrics ? '<span class="text-[8px] border border-white/30 px-1 rounded text-white/50 font-bold">E</span>' : ''}
+                            <p class="text-[10px] opacity-30 uppercase font-black truncate-custom" onclick="event.stopPropagation(); openArtist(${t.artist?.id})">${t.artist?.name || 'Unknown'}</p>
+                        </div>
+                    </div>
+                </div>`}).join('');
+        }
+
+        window.openArtist = (artistId) => {
+            switchScreen('artist');
+            document.getElementById('artist-tracks-list').innerHTML = '<div class="spinner mx-auto"></div>';
+            document.getElementById('artist-albums-list').innerHTML = '';
+            fetchDeezer(`https://api.deezer.com/artist/${artistId}`, (data) => {
+                currentArtist = data; document.getElementById('artist-name-title').innerText = data.name;
+                document.getElementById('artist-cover').src = data.picture_xl || data.picture_big;
+                document.getElementById('artist-fans').innerText = new Intl.NumberFormat('ru-RU').format(data.nb_fan);
+                if(unsubscribeArtistStats) unsubscribeArtistStats();
+                unsubscribeArtistStats = onSnapshot(doc(db, 'artist_stats', artistId.toString()), (snap) => {
+                    const stats = snap.exists() ? snap.data() : { subs: 0 };
+                    document.getElementById('devo-subs-count').innerText = new Intl.NumberFormat('ru-RU').format(stats.subs || 0);
+                });
+                const isSubbed = subscriptions.some(s => s.id === artistId);
+                const btn = document.getElementById('artist-sub-btn');
+                btn.innerText = isSubbed ? 'Вы подписаны' : 'Подписаться';
+                btn.classList.toggle('active', isSubbed);
+                btn.onclick = () => toggleSubscribeArtist(artistId, data.name);
+            });
+            fetchDeezer(`https://api.deezer.com/artist/${artistId}/top?limit=20`, (data) => {
+                window.artistTracks = data.data.map(t => ({...t, source: 'deezer'})); renderTracks('artist-tracks-list', window.artistTracks, 'artist');
+            });
+            fetchDeezer(`https://api.deezer.com/artist/${artistId}/albums?limit=15`, (data) => {
+                document.getElementById('artist-albums-list').innerHTML = data.data.map(a => `
+                    <div class="flex-shrink-0 w-32 active:scale-95 transition" onclick="searchFor('${a.title}')">
+                        <img src="${a.cover_medium}" class="w-32 h-32 rounded-3xl mb-2 object-cover bg-zinc-800">
+                        <p class="text-[10px] font-bold truncate-custom">${a.title}</p>
+                        <p class="text-[8px] opacity-40 font-black uppercase">${a.release_date ? a.release_date.split('-')[0] : ''}</p>
+                    </div>`).join('');
+            });
+        };
+
+        window.toggleSubscribeArtist = async (artistId, artistName) => {
+            if (!currentUserId || !artistId) return;
+            
+            const artistData = { 
+                id: artistId, 
+                name: artistName || currentArtist?.name,
+                picture_medium: currentArtist?.picture_medium
+            };
+            
+            const exists = subscriptions.find(s => s.id === artistId);
+            const updated = exists ? subscriptions.filter(s => s.id !== artistId) : [...subscriptions, artistData];
+            
+            await setDoc(doc(db, 'users', currentUserId), { subscriptions: updated }, { merge: true });
+            
+            const statsRef = doc(db, 'artist_stats', artistId.toString());
+            await setDoc(statsRef, { 
+                subs: increment(exists ? -1 : 1), 
+                name: artistData.name 
+            }, { merge: true });
+            
+            const btn = document.getElementById('artist-sub-btn');
+            btn.innerText = exists ? 'Подписаться' : 'Вы подписаны';
+            btn.classList.toggle('active', !exists);
+            
+            showToast(exists ? "Отписались" : "Подписались");
+        };
+
+        window.playFromList = async (type, idx) => {
+            let list = [];
+            if (type === 'trending') list = window.trendingTracks;
+            else if (type === 'recommend') list = window.recommendTracks;
+            else if (type === 'search') list = window.searchTracks;
+            else if (type === 'fav') list = favorites;
+            else if (type === 'history') list = listenHistory;
+            else if (type === 'artist') list = window.artistTracks;
+            else if (type === 'vibe') list = vibeQueue;
+            else if (type === 'offline') list = offlineTracks;
+            
+            isVibeMode = (type === 'vibe');
+            currentIndex = idx; 
+            currentQueue = list;
+            await loadTrackHybrid(list[idx]);
+        };
+
+        async function loadTrackHybrid(track) {
+            setLoading(true); 
+            document.getElementById('mini-player').classList.remove('hidden', 'opacity-0'); 
+            
+            // Обновляем медиа-метаданные для экрана блокировки
+            updateMediaMetadata(track);
+            
+            // Показываем уведомление
+            showMusicNotification(track, !audio.paused);
+            
+            updateUI();
+            
+            // Обновляем комнату если я владелец
+            if (isRoomOwner) {
+                updateRoomTrack(track);
+            }
+            
+            const bgUrl = track.album?.cover_xl || track.album?.cover_medium || '';
+            
+            const v1 = document.getElementById('vibe-blob-1'), v2 = document.getElementById('vibe-blob-2');
+            if(v1 && v2 && bgUrl) { v1.style.backgroundImage = v2.style.backgroundImage = `url('${bgUrl}')`; }
+            
+            const l1 = document.getElementById('bg-primary'), l2 = document.getElementById('bg-secondary');
+            if (bgUrl) {
+                const img = new Image(); img.src = bgUrl; img.onload = () => {
+                    if (activeBgLayer === 1) { l2.style.backgroundImage = `url('${bgUrl}')`; l2.style.opacity = '1'; l1.style.opacity = '0'; activeBgLayer = 2; }
+                    else { l1.style.backgroundImage = `url('${bgUrl}')`; l1.style.opacity = '1'; l2.style.opacity = '0'; activeBgLayer = 1; }
+                };
+            }
+
+            try {
+                // ПРОВЕРКА НА ОФФЛАЙН: Ищем трек в локальном кэше
+                const cache = await caches.open('devo-audio-cache');
+                const cachedResponse = await cache.match(`/offline-audio/${track.id}`);
+
+                if (cachedResponse) {
+                    // Если трек есть в кэше, достаем его как Blob (файл)
+                    const blob = await cachedResponse.blob();
+                    // Создаем временную локальную ссылку для плеера
+                    audio.src = URL.createObjectURL(blob);
+                    await audio.play(); 
+                    addToHistory(track);
+                    
+                    // Запускаем отслеживание прослушивания для баллов
+                    startPlayTracking(track);
+                    updateTrackPlayCount(track.id);
+                    
+                    setTimeout(() => updateMediaPositionState(), 100);
+                    setLoading(false);
+                    return; // Прерываем функцию, чтобы не делать запрос к VK
+                }
+
+                // ЕСЛИ ТРЕКА НЕТ В КЭШЕ - СТАНДАРТНАЯ ЛОГИКА ОНЛАЙН
+                if (!vkToken) {
+                    showToast("Требуется VK токен");
+                    setLoading(false);
+                    return;
+                }
+                
+                // Всегда используем VK для воспроизведения
+                const searchQ = `${track.artist?.name || ''} ${track.title || ''}`.trim();
+                if (!searchQ) {
+                    setLoading(false);
+                    return;
+                }
+                
+                const response = await fetch(`${PROXY_SERVER}/vk_search?q=${encodeURIComponent(searchQ)}&token=${vkToken}`);
+                const vkData = await response.json();
+                
+                if (vkData.tracks && vkData.tracks.length > 0 && vkData.tracks[0].preview) {
+                    audio.src = vkData.tracks[0].preview; 
+                    await audio.play(); 
+                    addToHistory(track);
+                    
+                    // Запускаем отслеживание прослушивания для баллов
+                    startPlayTracking(track);
+                    updateTrackPlayCount(track.id);
+                    
+                    // Обновляем состояние позиции для Media Session
+                    setTimeout(() => {
+                        updateMediaPositionState();
+                    }, 100);
+                } else {
+                    showToast("Трек не найден в VK");
+                    // Штрафные баллы за неудачное воспроизведение
+                    updateVibeScore(track.id, -2);
+                }
+            } catch (e) {
+                console.error("Playback error:", e);
+                // Если нет интернета и трек не скачан, покажем понятную ошибку
+                if (!navigator.onLine) {
+                    showToast("Нет интернета. Трек не скачан.");
+                } else {
+                    showToast("Ошибка воспроизведения");
+                }
+                // Штрафные баллы за ошибку
+                updateVibeScore(track.id, -1);
+            }
+            setLoading(false);
+        }
+
+        async function addToHistory(track) {
+            if (!currentUserId) return;
+            const updated = [track, ...listenHistory.filter(t => t.id !== track.id)].slice(0, 30);
+            await setDoc(doc(db, 'users', currentUserId), { history: updated }, { merge: true });
+            
+            if (isVibeMode) {
+                analyzeUserPreferences();
+            }
+        }
+
+        function setLoading(loading) {
+            isLoading = loading;
+            const mS = document.getElementById('m-spinner'), fS = document.getElementById('f-spinner'), mI = document.getElementById('m-icon'), fI = document.getElementById('f-icon');
+            if (loading) {
+                if (mS) mS.classList.remove('hidden'); if (fS) fS.classList.remove('hidden');
+                if (mI) mI.style.opacity = '0'; if (fI) fI.style.opacity = '0';
+            } else {
+                if (mS) mS.classList.add('hidden'); if (fS) fS.classList.add('hidden');
+                if (mI) mI.style.opacity = '1'; if (fI) fI.style.opacity = '1';
+            }
+        }
+
+        window.togglePlay = (e) => { 
+            e?.stopPropagation(); 
+            if (!isLoading) {
+                if (audio.paused) {
+                    audio.play();
+                    if (mediaSession) mediaSession.playbackState = 'playing';
+                    if (isRoomOwner) updateRoomPlaybackState();
+                    
+                    // Обновляем уведомление
+                    if (currentIndex !== -1) {
+                        showMusicNotification(currentQueue[currentIndex], true);
+                    }
+                } else {
+                    audio.pause();
+                    if (mediaSession) mediaSession.playbackState = 'paused';
+                    if (isRoomOwner) updateRoomPlaybackState();
+                    
+                    // Обновляем уведомление
+                    if (currentIndex !== -1) {
+                        showMusicNotification(currentQueue[currentIndex], false);
+                    }
+                }
+            }
+        };
+        
+        audio.onplay = () => { 
+            updatePlayIcons(false); 
+            if (mediaSession) mediaSession.playbackState = 'playing';
+            if (isRoomOwner) updateRoomPlaybackState();
+            
+            // Обновляем уведомление
+            if (currentIndex !== -1) {
+                showMusicNotification(currentQueue[currentIndex], true);
+            }
+            
+            // Обновляем позицию
+            updateMediaPositionState();
+            
+            // Запускаем отслеживание прослушивания
+            if (currentIndex !== -1 && currentQueue[currentIndex]) {
+                startPlayTracking(currentQueue[currentIndex]);
+            }
+        };
+        
+        audio.onpause = () => { 
+            updatePlayIcons(true); 
+            if (mediaSession) mediaSession.playbackState = 'paused';
+            if (isRoomOwner) updateRoomPlaybackState();
+            
+            // Обновляем уведомление
+            if (currentIndex !== -1) {
+                showMusicNotification(currentQueue[currentIndex], false);
+            }
+            
+            // Останавливаем отслеживание прослушивания
+            stopPlayTracking();
+        };
+        
+        audio.onended = () => { 
+            // Начисляем баллы за полное прослушивание
+            if (currentIndex !== -1 && currentQueue[currentIndex]) {
+                updateVibeScore(currentQueue[currentIndex].id, 5);
+            }
+            
+            if (isVibeMode && vibeQueue.length > 0) {
+                loadSimilarTrack();
+            } else {
+                nextTrack();
+            }
+            
+            // Скрываем уведомление (или показываем новое при следующем треке)
+        };
+
+        audio.ontimeupdate = () => {
+            if (isRoomOwner && audio.currentTime % 5 < 0.1) {
+                updateRoomPlaybackState();
+            }
+            
+            // Обновляем позицию для Media Session
+            if (Math.floor(audio.currentTime) % 1 === 0) {
+                updateMediaPositionState();
+            }
+        };
+
+        audio.onloadedmetadata = () => {
+            updateMediaPositionState();
+        };
+
+        async function loadSimilarTrack() {
+            if (vibeQueue.length === 0) return;
+            
+            // Пересортировываем очередь на основе актуальных баллов
+            vibeQueue.sort((a, b) => {
+                const scoreA = vibeScores[a.id] || 0;
+                const scoreB = vibeScores[b.id] || 0;
+                return scoreB - scoreA;
+            });
+            
+            vibeIndex = (vibeIndex + 1) % vibeQueue.length;
+            currentIndex = vibeIndex;
+            
+            if (vibeIndex === 0) {
+                await loadVibeTracks();
+            }
+            
+            if (vibeQueue[vibeIndex]) {
+                await loadTrackHybrid(vibeQueue[vibeIndex]);
+            } else {
+                nextTrack();
+            }
+        }
+
+        function updatePlayIcons(paused) {
+            const path = paused ? '<path d="M8 5v14l11-7z"/>' : '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>';
+            document.getElementById('m-icon').innerHTML = document.getElementById('f-icon').innerHTML = path;
+        }
+
+        window.nextTrack = () => {
+            if (isVibeMode && vibeQueue.length > 0) {
+                loadSimilarTrack();
+            } else if (currentIndex < currentQueue.length - 1) {
+                currentIndex++;
+                loadTrackHybrid(currentQueue[currentIndex]);
+            }
+        };
+        
+        window.prevTrack = () => {
+            if (isVibeMode && vibeQueue.length > 0) {
+                vibeIndex = vibeIndex > 0 ? vibeIndex - 1 : vibeQueue.length - 1;
+                currentIndex = vibeIndex;
+                loadTrackHybrid(vibeQueue[vibeIndex]);
+            } else if (currentIndex > 0) {
+                currentIndex--;
+                loadTrackHybrid(currentQueue[currentIndex]);
+            }
+        };
+
+        function updateUI() {
+            if (currentIndex === -1 || !currentQueue[currentIndex]) return;
+            const t = currentQueue[currentIndex];
+            const isFav = favorites.some(f => f.id === t.id);
+            const isSubbed = subscriptions.some(s => s.id === (t.artist?.id || 0));
+            document.getElementById('m-title').innerText = document.getElementById('f-title').innerText = t.title || 'Unknown';
+            document.getElementById('m-artist').innerText = document.getElementById('f-artist').innerText = t.artist?.name || 'Unknown';
+            document.getElementById('m-img').src = t.album?.cover_medium || ''; 
+            document.getElementById('f-img').src = t.album?.cover_xl || t.album?.cover_medium || '';
+            const subBtn = document.getElementById('f-sub');
+            if (subBtn) { subBtn.innerText = isSubbed ? 'Вы подписаны' : 'Подписаться'; subBtn.classList.toggle('active', isSubbed); }
+            [document.getElementById('f-fav'), document.getElementById('m-fav')].forEach(btn => {
+                if (!btn) return; const svg = btn.querySelector('svg');
+                svg.style.fill = isFav ? '#ff2d55' : 'none'; svg.style.stroke = isFav ? '#ff2d55' : 'currentColor';
+            });
+            
+            // Подсветка кнопки скачивания
+            const downloadBtn = document.getElementById('f-download');
+            if (downloadBtn) {
+                const isDownloaded = offlineTracks.some(off => off.id === t.id);
+                const svgDown = downloadBtn.querySelector('svg');
+                svgDown.style.stroke = isDownloaded ? '#ff2d55' : 'currentColor';
+            }
+            
+            document.querySelectorAll('.track-card, .trending-item').forEach(c => c.classList.toggle('active-track', c.dataset.id == t.id));
+        }
+
+        window.seek = (e) => {
+            if (!audio.duration) return; const rect = e.currentTarget.getBoundingClientRect();
+            audio.currentTime = ((e.clientX - rect.left) / rect.width) * audio.duration;
+            if (isRoomOwner) updateRoomPlaybackState();
+            
+            // Обновляем позицию для Media Session
+            updateMediaPositionState();
+        };
+
+        function updateProgress() {
+            if (audio.duration) {
+                const pct = (audio.currentTime / audio.duration) * 100;
+                document.getElementById('m-progress-bar').style.width = document.getElementById('f-progress').style.width = pct + '%';
+                document.getElementById('f-current').innerText = formatTime(audio.currentTime); document.getElementById('f-duration').innerText = formatTime(audio.duration);
+            }
+            requestAnimationFrame(updateProgress);
+        }
+        requestAnimationFrame(updateProgress);
+
+        function formatTime(s) { const m = Math.floor(s/60), sc = Math.floor(s%60); return `${m}:${sc < 10 ? '0' : ''}${sc}`; }
+
+        function renderHistory() {
+            const box = document.getElementById('search-history-box');
+            if (history.length === 0) { box.classList.add('hidden'); return; }
+            box.classList.remove('hidden');
+            document.getElementById('search-history').innerHTML = history.slice(0, 5).map(h => `<div class="glass px-4 py-2 rounded-full text-[10px] font-bold uppercase cursor-pointer" onclick="searchFor('${h}')">${h}</div>`).join('');
+        }
+
+        window.searchFor = (query) => { switchScreen('search'); document.getElementById('search-input').value = query; triggerSearch(query); };
+        document.getElementById('search-input').addEventListener('input', (e) => {
+            const q = e.target.value.trim(); clearTimeout(searchTimeout);
+            if (q.length >= 2) searchTimeout = setTimeout(() => triggerSearch(q), 500);
+        });
+
+        async function triggerSearch(q) {
+            if (q.length < 2) return;
+            if (!history.includes(q)) { history.unshift(q); history = history.slice(0, 10); localStorage.setItem('devo_search_history', JSON.stringify(history)); renderHistory(); }
+            document.getElementById('search-results').innerHTML = ''; document.getElementById('search-loader').classList.remove('hidden');
+            
+            // Поиск только через VK Music
+            const vkResults = await searchVK(q);
+            
+            window.searchTracks = vkResults;
+            document.getElementById('search-loader').classList.add('hidden');
+            
+            if (vkResults.length === 0) {
+                document.getElementById('search-results').innerHTML = '<div class="text-center py-10 opacity-30 text-xs font-black uppercase">Ничего не найдено</div>';
+            } else {
+                renderTracks('search-results', vkResults, 'search');
+            }
+        }
+
+        window.openFullPlayer = () => {
+            document.body.classList.add('player-open'); document.getElementById('full-player').classList.add('open');
+            document.getElementById('mini-player').classList.add('opacity-0'); setTimeout(() => document.getElementById('mini-player').classList.add('hidden'), 300);
+        };
+        window.closeFullPlayer = () => {
+            document.body.classList.remove('player-open'); document.getElementById('full-player').classList.remove('open');
+            document.getElementById('mini-player').classList.remove('hidden'); setTimeout(() => document.getElementById('mini-player').classList.remove('opacity-0'), 10);
+        };
+
+        miniPlayer.addEventListener('touchstart', (e) => { touchStart.x = e.touches[0].clientX; }, { passive: true });
+        miniPlayer.addEventListener('touchend', (e) => {
+            const diffX = touchStart.x - e.changedTouches[0].clientX;
+            if (Math.abs(diffX) > 50) diffX > 0 ? nextTrack() : prevTrack();
+        }, { passive: true });
+
+        fullPlayer.addEventListener('touchstart', (e) => {
+            if (e.target.closest('button') || e.target.id === 'progress-container') return;
+            touchStart.y = e.touches[0].clientY; isSwipingFullPlayer = true;
+            fullPlayer.style.transition = 'none';
+        }, { passive: true });
+
+        fullPlayer.addEventListener('touchmove', (e) => {
+            if (!isSwipingFullPlayer) return;
+            const diffY = e.touches[0].clientY - touchStart.y;
+            if (diffY > 0) fullPlayer.style.transform = `translate3d(0, ${diffY}px, 0)`;
+        }, { passive: false });
+
+        fullPlayer.addEventListener('touchend', (e) => {
+            if (!isSwipingFullPlayer) return; isSwipingFullPlayer = false;
+            const diffY = e.changedTouches[0].clientY - touchStart.y;
+            fullPlayer.style.transition = 'top 0.45s cubic-bezier(0.19, 1, 0.22, 1), transform 0.3s ease-out';
+            if (diffY > 120) { closeFullPlayer(); setTimeout(() => { fullPlayer.style.transform = 'translate3d(0,0,0)'; }, 450); }
+            else { fullPlayer.style.transform = 'translate3d(0,0,0)'; }
+        }, { passive: true });
+
+        window.copyID = (id) => copyToClipboard(document.getElementById(id).innerText);
+        window.copyMyID = () => currentUserId && copyToClipboard(currentUserId);
+        function copyToClipboard(text) {
+            const el = document.createElement('textarea'); el.value = text; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el); showToast("Скопировано");
+        }
+
+        function showToast(msg) {
+            const t = document.getElementById('toast'); t.innerText = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2000);
+        }
+
+        window.switchScreen = (id) => {
+            document.querySelectorAll('.screen, .nav-btn').forEach(x => x.classList.remove('active'));
+            const s = document.getElementById(`screen-${id}`); if(s) s.classList.add('active');
+            const n = document.getElementById(`nav-${id}`); if(n) n.classList.add('active');
+        };
+
+        window.toggleFavorite = async (e) => {
+            e.stopPropagation(); if (!currentUserId || currentIndex === -1) return;
+            const t = currentQueue[currentIndex], exists = favorites.find(f => f.id === t.id);
+            const updated = exists ? favorites.filter(f => f.id !== t.id) : [...favorites, t];
+            await setDoc(doc(db, 'users', currentUserId), { favorites: updated }, { merge: true });
+            
+            // Начисляем баллы за лайк
+            if (!exists) {
+                updateVibeScore(t.id, 10); // Большой бонус за лайк
+            } else {
+                updateVibeScore(t.id, -5); // Штраф за снятие лайка
+            }
+            
+            showToast(exists ? "Убрано из избранного" : "Добавлено в избранное");
+        };
+
+        window.toggleSubscribe = async (e) => {
+            e.stopPropagation(); if (!currentUserId || currentIndex === -1) return;
+            const artist = currentQueue[currentIndex].artist;
+            const exists = subscriptions.find(s => s.id === artist.id);
+            const updated = exists ? subscriptions.filter(s => s.id !== artist.id) : [...subscriptions, artist];
+            await setDoc(doc(db, 'users', currentUserId), { subscriptions: updated }, { merge: true });
+            const statsRef = doc(db, 'artist_stats', artist.id.toString());
+            await setDoc(statsRef, { subs: increment(exists ? -1 : 1), name: artist.name }, { merge: true });
+            showToast(exists ? "Отписались" : "Подписались");
+        };
+
+        window.renderFavorites = () => renderTracks('favorites-list', favorites, 'fav');
+        window.renderSubscriptions = () => {
+            const container = document.getElementById('subscriptions-list');
+            if (subscriptions.length === 0) { container.innerHTML = '<div class="opacity-10 py-4 text-[9px] font-black uppercase">Нет подписок</div>'; return; }
+            container.innerHTML = subscriptions.map(s => `
+                <div class="flex flex-col items-center gap-2 flex-shrink-0 w-20 active:scale-95 transition" onclick="openArtist(${s.id})">
+                    <div class="w-16 h-16 rounded-full bg-zinc-800 overflow-hidden border border-white/10"><img src="${s.picture_medium || 'https://api.deezer.com/artist/'+s.id+'/image'}" class="w-full h-full object-cover"></div>
+                    <span class="text-[9px] font-black uppercase tracking-tighter truncate w-full text-center opacity-60">${s.name}</span>
+                </div>`).join('');
+        };
+        window.renderListenHistory = () => renderTracks('listen-history-list', listenHistory, 'history');
+        window.goToArtistFromPlayer = () => { if (currentIndex === -1) return; closeFullPlayer(); openArtist(currentQueue[currentIndex].artist.id); };
+    </script>
+</body>
+</html>
